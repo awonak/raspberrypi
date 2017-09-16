@@ -12,13 +12,13 @@ class LED(object):
         GPIO.setup(self.pin, GPIO.OUT)
 
     def blink(self, duration):
-        on()
+        self.on()
         time.sleep(duration)
-        off()
-  
+        self.off()
+
     def on(self):
         GPIO.output(self.pin, GPIO.HIGH)
-  
+
     def off(self):
         GPIO.output(self.pin, GPIO.LOW)
 

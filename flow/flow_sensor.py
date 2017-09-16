@@ -10,6 +10,25 @@ Pulses per Liter: 450
 
 https://www.adafruit.com/product/828
 
+Example usage:
+
+    import time
+    from flow_sensor import FlowSensor
+
+    def do_click(pin):
+        current_time = int(time.time() * 1000)
+        sensor.update(current_time)
+
+    sensor = FlowSensor("Beer", 22, do_click)
+
+    while True:
+        current_time = int(time.time() * 1000)
+        if sensor.done_pouring(current_time):
+            sensor.display()
+            sensor.reset()
+
+        time.sleep(0.2)
+
 """
 import RPi.GPIO as GPIO
 

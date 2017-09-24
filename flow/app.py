@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import atexit
+import logging
 import time
 
 import RPi.GPIO as GPIO
@@ -8,6 +9,10 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
 from flow_sensor import FlowSensor
+
+# Constants
+DEBUG = False
+NAMESPACE = "/test"
 
 # Flow sensor pin number
 FLOW_SENSOR1 = 22
@@ -17,27 +22,34 @@ FLOW_SENSOR2 = 23
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='threading')
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='(%(threadName)-10s) %(message)s')
 
-# Define a callback function for handling pulses
-def do_click(pin):
+def pour_event(pin):
+    """Callback function for sensor pulse event"""
     sensor = SENSORS[pin]
     current_time = int(time.time() * 1000)
     begin = sensor.update(current_time)
 
     if begin:
         msg = "Begin Pour of {}".format(sensor.name)
-        print msg
-        socketio.emit('my_response', {"data": msg, "count": 0}, namespace="/test")
+        logging.info(msg)
+        socketio.emit('my_response', {"data": msg, "count": 0},
+                      namespace=NAMESPACE)
 
+def pour_complete(pin):
+    """Callback function for pour complete event"""
+    sensor = SENSORS[pin]
+    logging.info(sensor.display())
+    socketio.emit('my_response', {"data": sensor.display(), "count": 0},
+                  namespace=NAMESPACE)
 
 # Define your pin:flow_sensor map
 SENSORS = {
-    FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, do_click),
-    FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, do_click)
+    FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, pour_event, pour_complete),
+    FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, pour_event, pour_complete),
 }
-
-[s.start() for s in SENSORS.values()]
-
 
 
 # Webapp Routes and Handlers
@@ -46,17 +58,17 @@ def hello():
     return render_template("index.html")
 
 
-@socketio.on("my_event", namespace="/test")
+@socketio.on("my_event", namespace=NAMESPACE)
 def test_message(message):
     emit("my_response", {"data": message["data"], "count": 0})
 
 
-@socketio.on("connect", namespace="/test")
+@socketio.on("connect", namespace=NAMESPACE)
 def test_connect():
     emit("my_response", {"data": "Connected", "count": 0})
 
 
-@socketio.on("disconnect", namespace="/test")
+@socketio.on("disconnect", namespace=NAMESPACE)
 def test_disconnect():
     emit("my_response", {"data": "Disconnected", "count": 0})
 
@@ -70,4 +82,9 @@ def cleanup():
 
 # Main app
 if __name__ == '__main__':
-    socketio.run(app, threaded=True, debug=False)
+    # Start each sensor thread
+    for _sensor in SENSORS.values():
+        _sensor.start()
+
+    # Start the webserver thread
+    socketio.run(app, threaded=True, debug=DEBUG)

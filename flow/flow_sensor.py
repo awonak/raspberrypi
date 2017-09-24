@@ -16,12 +16,16 @@ Example usage:
     from flow_sensor import FlowSensor
 
     # Define a callback function for handling pulses
-    def do_click(pin):
+    def pour_event(pin):
         current_time = int(time.time() * 1000)
         sensor.update(current_time)
 
+    # Define a callback function for handling pour complete
+    def pour_complete(pin):
+        print sensor.display()
+
     # Create an instance of a flow meter and run it
-    sensor = FlowSensor("Beer", 22, do_click)
+    sensor = FlowSensor("Beer", 22, pour_event, pour_complete)
     sensor.start()
 
 """
@@ -32,10 +36,8 @@ import threading
 import RPi.GPIO as GPIO
 
 logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-10s) %(message)s',
-                    )
+                    format='(%(threadName)-10s) %(message)s')
 # Constants
-DEBUG = False
 FINISHED_DELAY = 2 * 1000  # 2 seconds in miliseconds
 MINUTE = 60  # seconds per minute
 MIN_POUR = 0.1 #0.23  # Minimum pour volume check (~8oz)
@@ -50,14 +52,16 @@ class FlowSensor(threading.Thread):
     Args:
         name (str): The name of the FlowSensor.
         pin (int): The BCM pin number for this sensor.
-        callback (function): The code to be executed with each pulse input.
+        pour_event (function): The code to be executed with each pulse input.
+        pour_complete (function): The code to be executed when pour complete.
 
     Attributes:
-        pulses (int): The count of each input pulse received from the sensor.
         last_time (int): A timestamp in miliseconds of the last click event.
         pour (float): The volume in liters of the current measured pour.
+        pulses (int): The count of each input pulse received from the sensor.
         total_pour (float): The total volume in liters of all measured pours.
         name (str): The human readable string identifieir for this instance.
+        pin (int): The GPIO pin number used with this sensor instance.
 
     """
     last_time = 0
@@ -66,7 +70,7 @@ class FlowSensor(threading.Thread):
     total_pour = 0.0
     active = False
 
-    def __init__(self, name, pin, callback):
+    def __init__(self, name, pin, pour_event, pour_complete):
         # initialize threading
         threading.Thread.__init__(self)
         self.daemon = True
@@ -74,10 +78,11 @@ class FlowSensor(threading.Thread):
         # set instance variabes
         self.name = name
         self.pin = pin
+        self._pour_complete = pour_complete
 
         # configure GPIO for this sensor
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(pin, GPIO.RISING, callback=callback, 
+        GPIO.add_event_detect(pin, GPIO.RISING, callback=pour_event,
                               bouncetime=20)
 
     # override threading.run
@@ -86,7 +91,7 @@ class FlowSensor(threading.Thread):
         while True:
             current_time = int(time.time() * 1000)
             if self.done_pouring(current_time):
-                self.display()
+                self._pour_complete(self.pin)
                 self.reset()
 
             time.sleep(0.2)
@@ -137,8 +142,7 @@ class FlowSensor(threading.Thread):
         # Liters = Pulses / (7.5 * 60)
         self.pour = self.pulses / (FLOW_FREQ * MINUTE)
 
-        if DEBUG:
-            logging.debug("pour: %s  pulses: %s", self.pour, self.pulses)
+        logging.debug("pour: %s  pulses: %s", self.pour, self.pulses)
 
         # set last_time for next iteration
         self.last_time = current_time

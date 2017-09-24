@@ -12,37 +12,39 @@ https://www.adafruit.com/product/828
 
 Example usage:
 
-    import time
+    # Import the flow sensor library
     from flow_sensor import FlowSensor
 
+    # Define a callback function for handling pulses
     def do_click(pin):
         current_time = int(time.time() * 1000)
         sensor.update(current_time)
 
+    # Create an instance of a flow meter and run it
     sensor = FlowSensor("Beer", 22, do_click)
-
-    while True:
-        current_time = int(time.time() * 1000)
-        if sensor.done_pouring(current_time):
-            sensor.display()
-            sensor.reset()
-
-        time.sleep(0.2)
+    sensor.start()
 
 """
+import logging
+import time
+import threading
+
 import RPi.GPIO as GPIO
 
+logging.basicConfig(level=logging.DEBUG,
+                    format='(%(threadName)-10s) %(message)s',
+                    )
 # Constants
 DEBUG = False
 FINISHED_DELAY = 2 * 1000  # 2 seconds in miliseconds
 MINUTE = 60  # seconds per minute
 MIN_POUR = 0.23  # Minimum pour volume check (~8oz)
-VOLUME_PER_PULSE = 7.5  # Volume per pulse
+FLOW_FREQ = 7.5  # Flow rate frequency
 
 GPIO.setmode(GPIO.BCM)
 
 
-class FlowSensor(object):
+class FlowSensor(threading.Thread):
     """An instance of the Flow Meter sensor input and output
 
     Args:
@@ -64,19 +66,37 @@ class FlowSensor(object):
     total_pour = 0.0
 
     def __init__(self, name, pin, callback):
+        # initialize threading
+        threading.Thread.__init__(self)
+
         # set instance variabes
         self.name = name
         self.pin = pin
 
         # configure GPIO for this sensor
-        GPIO.setmode(GPIO.BCM)
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(pin, GPIO.RISING, callback=callback, bouncetime=20)
+        GPIO.add_event_detect(pin, GPIO.RISING, callback=callback, 
+                              bouncetime=20)
+
+    # override threading.run
+    def run(self):
+        logging.debug('starting name: %s on pin: %s', self.name, self.pin)
+        while True:
+            current_time = int(time.time() * 1000)
+            if self.done_pouring(current_time):
+                self.display()
+                self.reset()
+
+            time.sleep(0.2)
+        logging.debug('exiting name: %s on pin: %s', self.name, self.pin)
+
 
     def display(self):
-        """Print current pour and total pour stats"""
-        print "%s\nThis pour: %s\nTotal pour: %s\n" % (
-            self.name, self.pour, self.total_pour)
+        """Return current pour and total pour stats"""
+        msg = "{name}\nThis pour: {pour}\nTotal pour: {total_pour}\n".format(
+            **self.__dict__)
+        logging.info(msg)
+        return msg
 
     def reset(self):
         """Resets instance variables used to measure current pour"""
@@ -85,9 +105,9 @@ class FlowSensor(object):
 
     def done_pouring(self, current_time):
         """Determine if all conditions have satisfied a completed pour event"""
-        pour_duration = self.pour > MIN_POUR
-        pour_volume = (current_time - self.last_time) > FINISHED_DELAY
-        if pour_duration and pour_volume:
+        min_pour_duration = self.pour > MIN_POUR
+        min_pour_volume = (current_time - self.last_time) > FINISHED_DELAY
+        if min_pour_duration and min_pour_volume:
             self.total_pour += self.pour
             return True
         return False
@@ -102,10 +122,10 @@ class FlowSensor(object):
         # Liters = Q * time elapsed (seconds) / 60 (seconds/minute)
         # Liters = (Frequency (Pulses/second) / 7.5) * time elapsed (seconds) / 60
         # Liters = Pulses / (7.5 * 60)
-        self.pour = self.pulses / (VOLUME_PER_PULSE * MINUTE)
+        self.pour = self.pulses / (FLOW_FREQ * MINUTE)
 
         if DEBUG:
-            print "%s = %s / %s * %s" % (self.pour, self.pulses, VOLUME_PER_PULSE, MINUTE)
+            logging.debug("pour: %s  pulses: %s", self.pour, self.pulses)
 
         # set last_time for next iteration
         self.last_time = current_time

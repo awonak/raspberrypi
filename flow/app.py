@@ -31,17 +31,16 @@ def pour_event(pin):
     sensor = SENSORS[pin]
     current_time = int(time.time() * 1000)
     begin = sensor.update(current_time)
+    socketio.emit("pour_event", {"data": sensor.pour}, namespace=NAMESPACE)
 
     if begin:
         msg = "Begin Pour of {}".format(sensor.name)
-        logging.info(msg)
         socketio.emit('my_response', {"data": msg, "count": 0},
                       namespace=NAMESPACE)
 
 def pour_complete(pin):
     """Callback function for pour complete event"""
     sensor = SENSORS[pin]
-    logging.info(sensor.display())
     socketio.emit('my_response', {"data": sensor.display(), "count": 0},
                   namespace=NAMESPACE)
 
@@ -50,6 +49,9 @@ SENSORS = {
     FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, pour_event, pour_complete),
     FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, pour_event, pour_complete),
 }
+# Start each sensor thread
+for _sensor in SENSORS.values():
+    _sensor.start()
 
 
 # Webapp Routes and Handlers
@@ -76,15 +78,11 @@ def test_disconnect():
 # Clean up
 @atexit.register
 def cleanup():
-    print "Sensor cleanup..."
+    logging.info("Sensor cleanup...")
     GPIO.cleanup()
 
 
 # Main app
 if __name__ == '__main__':
-    # Start each sensor thread
-    for _sensor in SENSORS.values():
-        _sensor.start()
-
     # Start the webserver thread
     socketio.run(app, threaded=True, debug=DEBUG)

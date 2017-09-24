@@ -91,6 +91,7 @@ class FlowSensor(threading.Thread):
         while True:
             current_time = int(time.time() * 1000)
             if self.done_pouring(current_time):
+                logging.debug('Done pouring...')
                 self._pour_complete(self.pin)
                 self.reset()
 

@@ -22,7 +22,7 @@
 	    // The callback function is invoked when a connection with the
 	    // server is established.
 	    socket.on('connect', function() {
-	    socket.emit('my_event', {data: 'I\'m connected!'});
+	      socket.emit('my_event', {data: 'I\'m connected!'});
 	    });
 
 	    // Event handler for server sent data.
@@ -30,21 +30,26 @@
 	    // to the client. The data is then displayed in the "Received"
 	    // section of the page.
 	    socket.on('my_response', function(msg) {
-	    $('#log').append('<br>' + $('<div/>').text('Received #' + msg.count + ': ' + msg.data).html());
+	      $('#log').append('<br>' + $('<div/>').text('Received #' + msg.count + ': ' + msg.data).html());
+	    });
+
+	    socket.on('pour_event', function(msg) {
+	      $('#pour').html($('<div/>').text('Pouring: ' + msg.data));
 	    });
 
 	    // Handlers for the different forms in the page.
 	    // These accept data from the user and send it to the server in a
 	    // variety of ways
 	    $('form#emit').submit(function(event) {
-	    socket.emit('my_event', {data: $('#emit_data').val()});
-	    return false;
+	      socket.emit('my_event', {data: $('#emit_data').val()});
+	      return false;
 	    });
+	    
 	    $('form#disconnect').submit(function(event) {
-	    socket.emit('disconnect_request');
-	    return false;
+	      socket.emit('disconnect_request');
+	      return false;
 	    });
-	    });
+	  });
     </script>
   </head>
   <body>
@@ -59,5 +64,8 @@
     </form>
     <h2>Receive:</h2>
     <div id="log"></div>
+
+    <h2>This Pour:</h2>
+    <div id="pour"></div>
   </body>
 </html>

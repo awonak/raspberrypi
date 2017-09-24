@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.DEBUG,
 DEBUG = False
 FINISHED_DELAY = 2 * 1000  # 2 seconds in miliseconds
 MINUTE = 60  # seconds per minute
-MIN_POUR = 0.23  # Minimum pour volume check (~8oz)
+MIN_POUR = 0.1 #0.23  # Minimum pour volume check (~8oz)
 FLOW_FREQ = 7.5  # Flow rate frequency
 
 GPIO.setmode(GPIO.BCM)
@@ -118,9 +118,9 @@ class FlowSensor(threading.Thread):
     def _update_status(self):
         if not self.active:
             self.active = True
-            begin = True
+            return True
         else:
-            begin = False
+            return False
 
     def update(self, current_time):
         """Handle a pulse click event and update current pour volume

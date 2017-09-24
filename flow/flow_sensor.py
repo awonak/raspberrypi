@@ -64,10 +64,12 @@ class FlowSensor(threading.Thread):
     pour = 0.0
     pulses = 0
     total_pour = 0.0
+    active = False
 
     def __init__(self, name, pin, callback):
         # initialize threading
         threading.Thread.__init__(self)
+        self.daemon = True
 
         # set instance variabes
         self.name = name
@@ -94,7 +96,7 @@ class FlowSensor(threading.Thread):
     def display(self):
         """Return current pour and total pour stats"""
         msg = "{name}\nThis pour: {pour}\nTotal pour: {total_pour}\n".format(
-            **self.__dict__)
+            name=self.name, pour=self.pour, total_pour=self.total_pour)
         logging.info(msg)
         return msg
 
@@ -102,6 +104,7 @@ class FlowSensor(threading.Thread):
         """Resets instance variables used to measure current pour"""
         self.pulses = 0
         self.pour = 0.0
+        self.active = False
 
     def done_pouring(self, current_time):
         """Determine if all conditions have satisfied a completed pour event"""
@@ -112,8 +115,18 @@ class FlowSensor(threading.Thread):
             return True
         return False
 
+    def _update_status(self):
+        if not self.active:
+            self.active = True
+            begin = True
+        else:
+            begin = False
+
     def update(self, current_time):
-        """Handle a pulse click event and update current pour volume"""
+        """Handle a pulse click event and update current pour volume
+
+        Returns: (bool) If this is the begining of a pour event
+        """
         # measure flow meter pulses
         self.pulses += 1
 
@@ -129,3 +142,5 @@ class FlowSensor(threading.Thread):
 
         # set last_time for next iteration
         self.last_time = current_time
+
+        return self._update_status()

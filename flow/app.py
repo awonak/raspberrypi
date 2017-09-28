@@ -26,17 +26,11 @@ socketio = SocketIO(app, async_mode='threading')
 logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s')
 
-def pour_event(pin):
-    """Callback function for sensor pulse event"""
-    sensor = SENSORS[pin]
-    current_time = int(time.time() * 1000)
-    begin = sensor.update(current_time)
-    socketio.emit("pour_event", {"data": sensor.pour}, namespace=NAMESPACE)
 
-    if begin:
-        msg = "Begin Pour of {}".format(sensor.name)
-        socketio.emit('my_response', {"data": msg, "count": 0},
-                      namespace=NAMESPACE)
+def pour_start(pin)
+    sensor = SENSORS[pin]
+    socketio.emit('my_response', {"data": msg, "count": 0},
+                  namespace=NAMESPACE)
 
 def pour_complete(pin):
     """Callback function for pour complete event"""
@@ -44,11 +38,18 @@ def pour_complete(pin):
     socketio.emit('my_response', {"data": sensor.display(), "count": 0},
                   namespace=NAMESPACE)
 
+def pour_event(pin):
+    """Callback function for sensor pulse event"""
+    sensor = SENSORS[pin]
+    socketio.emit("pour_event", {"data": sensor.amount}, namespace=NAMESPACE)
+
+
 # Define your pin:flow_sensor map
 SENSORS = {
-    FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, pour_event, pour_complete),
-    FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, pour_event, pour_complete),
+    FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, pour_start, pour_complete, pour_event),
+    FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, pour_start, pour_complete, pour_event),
 }
+
 # Start each sensor thread
 for _sensor in SENSORS.values():
     _sensor.start()

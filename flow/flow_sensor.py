@@ -12,31 +12,36 @@ https://www.adafruit.com/product/828
 
 Example usage:
 
-    # Import the flow sensor library
-    from flow_sensor import FlowMeter
-    import time
+import time
+import signal
 
-    # Define a callback function for handling pulses
-    def flow_start(pin):
-        current_time = int(time.time() * 1000)
-        print "Flow started at %s" % current_time
+from flow_sensor import FlowMeter
 
-    # Define a callback function for handling flow stop
-    def flow_stop(pin):
-        current_time = int(time.time() * 1000)
-        print "Flow stopped at %s" % current_time
-        print sensor.display()
+# Define a callback function for handling pulses
+def flow_start(pin):
+    current_time = int(time.time() * 1000)
+    print "Flow started at %s" % current_time
 
-    # Create an instance of a flow meter and run it
-    sensor = FlowMeter("Beer", 22, flow_start, flow_stop)
-    sensor.start()
+# Define a callback function for handling flow stop
+def flow_stop(pin):
+    current_time = int(time.time() * 1000)
+    print "Flow stopped at %s" % current_time
+    print sensor.display()
+
+# Create an instance of a flow meter and run it
+sensor = FlowMeter("Beer", 22)
+sensor.flow_start = flow_start
+sensor.flow_stop = flow_stop
+
+# sleep until a signal is received
+signal.pause()
 
 """
 import logging
 import time
-import threading
 
 import RPi.GPIO as GPIO
+from gpiozero.threads import GPIOThread
 
 logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s')
@@ -47,16 +52,18 @@ FLOW_FREQ = 7.5  # Flow rate frequency
 GPIO.setmode(GPIO.BCM)
 
 
-class FlowMeter(threading.Thread):
-    """An instance of the Flow Meter sensor input and output
+class FlowMeter(GPIOThread):
+    """An instance of the Flow Meter sensor input and output.
+
+    FlowMeter callback methods
+    flow_start: The code to be executed when flow starts.
+    flow_stop: The code to be executed when flow stops.
+    flow_pulse: The code to be executed with each pulse input.
 
     Args:
         name (str): The name of the FlowMeter.
         pin (int): The BCM pin number for this sensor.
-        flow_start (function): The code to be executed when flow starts.
-        flow_stop (function): The code to be executed when flow stops.
-        flow_pulse (function): The code to be executed with each pulse input.
-
+        
     Attributes:
         last_time (int): A timestamp in miliseconds of the last click event.
         amount (float): The volume in liters since flow_start event.
@@ -76,23 +83,26 @@ class FlowMeter(threading.Thread):
     pulses = 0
     total_amount = 0.0
 
-    def __init__(self, name, pin, flow_start=None, flow_stop=None,
-                 flow_pulse=None):
+    def __init__(self, name, pin):
         # initialize threading
-        threading.Thread.__init__(self)
-        self.daemon = True
+        super(FlowMeter, self).__init__()
 
         # set instance variabes
         self.name = name
         self.pin = pin
-        self._start = flow_start or lambda pin: None
-        self._stop = flow_stop or lambda pin: None
-        self._pulse = flow_pulse or lambda pin: None
+
+        # Default callback methods
+        self.flow_start = lambda pin: None
+        self.flow_stop = lambda pin: None
+        self.flow_pulse = lambda pin: None
 
         # configure GPIO for this sensor
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.add_event_detect(pin, GPIO.RISING, callback=self.update,
                               bouncetime=20)
+
+        # Start thread
+        self.start()
 
     def _check_for_start(self):
         if not self.active:
@@ -109,6 +119,7 @@ class FlowMeter(threading.Thread):
 
     @staticmethod
     def time_in_ms():
+        """Returns current timestamp in miliseconds"""
         return int(time.time() * 1000)
 
     # override threading.run
@@ -139,7 +150,10 @@ class FlowMeter(threading.Thread):
 
     def update(self, _):
         """Handle a pulse event and update current volume amount"""
-        self._check_for_start()
+        if self._check_for_start():
+            logging.info('Flow started...')
+            self.active = True
+            self._start(self.pin)
 
         # count flow meter pulses
         self.pulses += 1

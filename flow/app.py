@@ -8,10 +8,11 @@ import RPi.GPIO as GPIO
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
-from flow_sensor import FlowSensor
+from flow_meter import FlowMeter
 
 # Constants
 DEBUG = False
+LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 NAMESPACE = "/test"
 
 # Flow sensor pin number
@@ -23,16 +24,16 @@ app = Flask(__name__)
 socketio = SocketIO(app, async_mode='threading')
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=LOG_LEVEL,
                     format='(%(threadName)-10s) %(message)s')
 
 
-def pour_start(pin)
+def pour_start(pin):
     sensor = SENSORS[pin]
-    socketio.emit('my_response', {"data": msg, "count": 0},
+    socketio.emit('my_response', {"data": "pour start", "count": 0},
                   namespace=NAMESPACE)
 
-def pour_complete(pin):
+def pour_stop(pin):
     """Callback function for pour complete event"""
     sensor = SENSORS[pin]
     socketio.emit('my_response', {"data": sensor.display(), "count": 0},
@@ -41,23 +42,25 @@ def pour_complete(pin):
 def pour_event(pin):
     """Callback function for sensor pulse event"""
     sensor = SENSORS[pin]
-    socketio.emit("pour_event", {"data": sensor.amount}, namespace=NAMESPACE)
+    socketio.emit('pouring', {"data": sensor.amount}, namespace=NAMESPACE)
 
 
 # Define your pin:flow_sensor map
 SENSORS = {
-    FLOW_SENSOR1: FlowSensor("Beer", FLOW_SENSOR1, pour_start, pour_complete, pour_event),
-    FLOW_SENSOR2: FlowSensor("Cider", FLOW_SENSOR2, pour_start, pour_complete, pour_event),
+    FLOW_SENSOR1: FlowMeter("Beer", FLOW_SENSOR1),
+    FLOW_SENSOR2: FlowMeter("Cider", FLOW_SENSOR2),
 }
 
 # Start each sensor thread
 for _sensor in SENSORS.values():
-    _sensor.start()
+    _sensor.flow_start=pour_start
+    _sensor.flow_stop=pour_stop
+    _sensor.flow_pulse=pour_event
 
 
 # Webapp Routes and Handlers
 @app.route("/")
-def hello():
+def index():
     return render_template("index.html")
 
 
@@ -80,6 +83,11 @@ def test_disconnect():
 @atexit.register
 def cleanup():
     logging.info("Sensor cleanup...")
+
+    while SENSORS.values():
+        for t in SENSORS.values():
+            t.stop()
+
     GPIO.cleanup()
 
 

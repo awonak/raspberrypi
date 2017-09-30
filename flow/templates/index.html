@@ -33,7 +33,8 @@
 	      $('#log').append('<br>' + $('<div/>').text('Received #' + msg.count + ': ' + msg.data).html());
 	    });
 
-	    socket.on('pour_event', function(msg) {
+	    socket.on('pouring', function(msg) {
+	      console.log(msg);
 	      $('#pour').html($('<div/>').text('Pouring: ' + msg.data));
 	    });
 

@@ -43,8 +43,12 @@ import time
 import RPi.GPIO as GPIO
 from gpiozero.threads import GPIOThread
 
-logging.basicConfig(level=logging.DEBUG,
+DEBUG = False
+LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
+
+logging.basicConfig(level=LOG_LEVEL,
                     format='(%(threadName)-10s) %(message)s')
+
 # Constants
 MINUTE = 60  # seconds per minute
 FLOW_FREQ = 7.5  # Flow rate frequency
@@ -105,10 +109,8 @@ class FlowMeter(GPIOThread):
         self.start()
 
     def _check_for_start(self):
-        if not self.active:
-            logging.info('Flow started...')
-            self.active = True
-            self._start(self.pin)
+        """Determine if the sensor was not previously active"""
+        return not self.active
 
     def _check_for_stop(self):
         """Determine if all conditions have satisfied a stop flow event"""
@@ -130,10 +132,9 @@ class FlowMeter(GPIOThread):
             if self._check_for_stop():
                 logging.info('Flow stopped...')
                 self.total_amount += self.amount
-                self._stop(self.pin)
+                self.flow_stop(self.pin)
                 self.reset()
             time.sleep(0.1)
-        logging.debug('exiting name: %s on pin: %s', self.name, self.pin)
 
     def display(self):
         """Return current amount and total amount stats"""
@@ -153,7 +154,7 @@ class FlowMeter(GPIOThread):
         if self._check_for_start():
             logging.info('Flow started...')
             self.active = True
-            self._start(self.pin)
+            self.flow_start(self.pin)
 
         # count flow meter pulses
         self.pulses += 1
@@ -169,5 +170,5 @@ class FlowMeter(GPIOThread):
         self.last_time = self.time_in_ms()
 
         # call pulse event callback
-        self._pulse(self.pin)
+        self.flow_pulse(self.pin)
         logging.debug("Flow pulse amount: %s  pulses: %s", self.amount, self.pulses)

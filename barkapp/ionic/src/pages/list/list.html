@@ -1,0 +1,17 @@
+<ion-header>
+  <ion-navbar>
+    <button ion-button menuToggle>
+      <ion-icon name="menu"></ion-icon>
+    </button>
+    <ion-title>Bark List</ion-title>
+  </ion-navbar>
+</ion-header>
+
+<ion-content>
+  <ion-list>
+    <ion-item *ngFor="let bark of barks">
+      <ion-icon name="alert" item-start></ion-icon>
+      {{bark}}
+    </ion-item>
+  </ion-list>
+</ion-content>
